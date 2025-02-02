@@ -93,7 +93,7 @@ if __name__ == "__main__":
     model, variables = dac_jax.load_model(model_type="44khz")
     x_sharding = get_sharding_for_spec(PartitionSpec("data"))
     replicate_sharding = get_sharding_for_spec(PartitionSpec(None))
-    @partial(jax.jit, in_shardings=x_sharding,out_shardings=replicate_sharding)
+    #@partial(jax.jit, in_shardings=x_sharding,out_shardings=replicate_sharding)
     def encode_to_codes(x: jnp.ndarray):
         codes, scale = model.apply(
             variables,
@@ -142,6 +142,7 @@ if __name__ == "__main__":
         writer = None
     speaker_semantic_dict = defaultdict(list)
     speaker_token_dict = defaultdict(list)
+    jitted_encode_to_codes = jax.jit(encode_to_codes,in_shardings=x_sharding,out_shardings=replicate_sharding)
     os.makedirs("/dev/shm/dac_dataset_1",exist_ok=True)
     for item in multihost_gen:
         print(f"round {i}")
@@ -152,7 +153,7 @@ if __name__ == "__main__":
                     writer.close() 
                 writer = ArrayRecordWriter(f"/dev/shm/dac_dataset_1/mls_eng_train_part_{num}.arrayrecord", 'group_size:1')
             
-        semantics = encode_to_codes(jnp.expand_dims(item["audio"],1))
+        semantics = jitted_encode_to_codes(jnp.expand_dims(item["audio"],1))
         i+=1
         text_lengths = jax.device_put(item["text_length"],replicate_sharding)
         n_frames = jax.device_put(item["audio_length"],replicate_sharding)
