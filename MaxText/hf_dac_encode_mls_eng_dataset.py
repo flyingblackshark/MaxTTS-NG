@@ -16,6 +16,8 @@ from array_record.python.array_record_module import ArrayRecordWriter
 import tiktoken
 from datasets import disable_caching
 from collections import defaultdict
+from jax.experimental.compilation_cache import compilation_cache as cc
+cc.set_cache_dir("/tmp/jax_cache")
 disable_caching()
 os.environ["HF_DATASETS_IN_MEMORY_MAX_SIZE"]=str(1024*1024*1024*64)
 
