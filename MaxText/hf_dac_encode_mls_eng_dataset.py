@@ -59,7 +59,7 @@ if __name__ == "__main__":
         device_mesh = mesh_utils.create_device_mesh((1, 1))
     mesh = Mesh(device_mesh, axis_names=("data", "model")) 
     dataset = datasets.load_dataset(
-        "fbs0/mls_eng_10k_added_text",
+        "parler-tts/mls_eng",
         split="train",
         streaming=True,
     )
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     )
     
     def process(example):
-        ids = enc.encode(text=example["text"])
+        ids = enc.encode(text=example["transcript"])
         
         return {'input_ids': ids}
     dataset = dataset.map(process)
