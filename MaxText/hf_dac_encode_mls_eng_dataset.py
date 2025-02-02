@@ -160,7 +160,7 @@ if __name__ == "__main__":
         speaker_ids = jax.device_put(item["speaker"],replicate_sharding)
         
         for k in range(PER_DEVICE_BATCH_SIZE * jax.device_count()):
-            print("working")
+            #print("working")
             n_frame = n_frames[k]//512
             text_length = text_lengths[k]
             text_token = text_tokens[k][:text_length]
