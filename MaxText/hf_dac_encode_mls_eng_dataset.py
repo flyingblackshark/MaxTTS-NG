@@ -147,7 +147,7 @@ if __name__ == "__main__":
     jitted_encode_to_codes = jax.jit(encode_to_codes,in_shardings=x_sharding,out_shardings=replicate_sharding)
     os.makedirs("/dev/shm/dac_dataset_1",exist_ok=True)
     for item in multihost_gen:
-        print(f"round {i}")
+        print(f"round {i}",flush=True)
         if jax.process_index() == 0:
             if i%10240 == 0:
                 num = i//10240
