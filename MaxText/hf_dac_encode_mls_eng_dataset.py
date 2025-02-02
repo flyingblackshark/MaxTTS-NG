@@ -141,7 +141,7 @@ if __name__ == "__main__":
     writer = None
     speaker_semantic_dict = defaultdict(list)
     speaker_token_dict = defaultdict(list)
-
+    os.makedirs("/dev/shm/dac_dataset_1",exist_ok=True)
     for item in multihost_gen:
         print(f"round {i}")
         if jax.process_index() == 0:
