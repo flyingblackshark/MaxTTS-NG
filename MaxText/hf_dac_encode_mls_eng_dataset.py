@@ -90,7 +90,9 @@ if __name__ == "__main__":
         A NamedSharding is simply a combination of a PartitionSpec and a Mesh instance.
         """
         return NamedSharding(mesh, pspec)
+    print("before download dac model")
     model, variables = dac_jax.load_model(model_type="44khz")
+    print("download dac model complete")
     x_sharding = get_sharding_for_spec(PartitionSpec("data"))
     replicate_sharding = get_sharding_for_spec(PartitionSpec(None))
     #@partial(jax.jit, in_shardings=x_sharding,out_shardings=replicate_sharding)
