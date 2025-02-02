@@ -145,7 +145,6 @@ if __name__ == "__main__":
     for item in multihost_gen:
         print(f"round {i}")
         if jax.process_index() == 0:
-            print(f"round {i}")
             if i%10240 == 0:
                 num = i//10240
                 if writer is not None:
