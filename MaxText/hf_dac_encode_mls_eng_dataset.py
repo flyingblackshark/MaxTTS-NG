@@ -152,17 +152,17 @@ if __name__ == "__main__":
         semantics = encode_to_codes(jnp.expand_dims(item["audio"],1))
         i+=1
         #semantics = jnp.asarray(semantics)
-        text_length = jax.device_put(item["text_length"],replicate_sharding)
+        text_lengths = jax.device_put(item["text_length"],replicate_sharding)
         n_frames = jax.device_put(item["audio_length"],replicate_sharding)
         text_tokens = jax.device_put(item["text"],replicate_sharding)
-        speaker_id = jax.device_put(item["speaker"],replicate_sharding)
+        speaker_ids = jax.device_put(item["speaker"],replicate_sharding)
         
         for k in range(PER_DEVICE_BATCH_SIZE * jax.device_count()):
-            n_frames = n_frames[k]//512
-            text_length = text_length[k]
-            text_tokens = text_tokens[k][:text_length]
-            semantics_slice = semantics[k][:,:n_frames]
-            speaker_id = int(speaker_id[k])
+            n_frame = n_frames[k]//512
+            text_length = text_lengths[k]
+            text_token = text_tokens[k][:text_length]
+            semantics_slice = semantics[k][:,:n_frame]
+            speaker_id = int(speaker_ids[k])
 
             speaker_semantic_list = speaker_semantic_dict[speaker_id]
             speaker_token_list = speaker_token_dict[speaker_id]
@@ -171,7 +171,7 @@ if __name__ == "__main__":
             new_text_length = text_tokens.shape[0]
 
             semantics_slice = np.asarray(semantics_slice)
-            text_slice = np.asarray(text_tokens)
+            text_slice = np.asarray(text_token)
 
 
             if sum(s.shape[1] for s in speaker_semantic_list) + sum(s.shape[0] for s in speaker_token_list) + new_semantic_length + new_text_length <= MAX_TOKEN_LENGTH:
