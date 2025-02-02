@@ -172,7 +172,7 @@ if __name__ == "__main__":
             speaker_token_list = speaker_token_dict[speaker_id]
 
             new_semantic_length = semantics_slice.shape[1]
-            new_text_length = text_tokens.shape[0]
+            new_text_length = text_token.shape[0]
 
             semantics_slice = np.asarray(semantics_slice)
             text_slice = np.asarray(text_token)
