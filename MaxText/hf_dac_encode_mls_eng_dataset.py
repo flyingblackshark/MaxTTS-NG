@@ -22,7 +22,8 @@ os.environ["HF_DATASETS_IN_MEMORY_MAX_SIZE"]=str(1024*1024*1024*64)
 DEVICE = "tpu"
 MAX_LENGTH_AUDIO = 30 * 44100
 MAX_LENGTH_TEXT = 10000
-GLOBAL_BATCH_SIZE = 64
+PER_DEVICE_BATCH_SIZE = 4
+#GLOBAL_BATCH_SIZE = PER_DEVICE_BATCH_SIZE * jax.device_count()
 SOURCE_SAMPLERATE = 16000
 class HFParseAudioFeatures(grain.MapTransform):
   """Normalize feature keys for HuggingFace input"""
@@ -109,7 +110,7 @@ if __name__ == "__main__":
     operations = []
     operations.append(HFParseAudioFeatures())
     operations.append(PadToMaxLength())
-    operations.append(grain.Batch(batch_size=GLOBAL_BATCH_SIZE, drop_remainder=True))
+    operations.append(grain.Batch(batch_size=PER_DEVICE_BATCH_SIZE * jax.device_count() // jax.process_count(), drop_remainder=True))
     dummy_index_sampler = grain.IndexSampler(
       num_records=len(dataset),
       num_epochs=1,
@@ -154,89 +155,89 @@ if __name__ == "__main__":
         n_frames = jax.device_put(item["audio_length"],replicate_sharding)
         text_tokens = jax.device_put(item["text"],replicate_sharding)
         speaker_id = jax.device_put(item["speaker"],replicate_sharding)
+        if jax.process_index() == 0:
+            for k in range(PER_DEVICE_BATCH_SIZE * jax.device_count()):
+                n_frames = n_frames[k]//512
+                text_length = text_length[k]
+                text_tokens = text_tokens[k][:text_length]
+                semantics_slice = semantics[k][:,:n_frames]
+                speaker_id = int(speaker_id[k])
 
-        for k in range(GLOBAL_BATCH_SIZE):
-            n_frames = n_frames[k]//512
-            text_length = text_length[k]
-            text_tokens = text_tokens[k][:text_length]
-            semantics_slice = semantics[k][:,:n_frames]
-            speaker_id = int(speaker_id[k])
+                speaker_semantic_list = speaker_semantic_dict[speaker_id]
+                speaker_token_list = speaker_token_dict[speaker_id]
 
-            speaker_semantic_list = speaker_semantic_dict[speaker_id]
-            speaker_token_list = speaker_token_dict[speaker_id]
+                new_semantic_length = semantics_slice.shape[1]
+                new_text_length = text_tokens.shape[0]
 
-            new_semantic_length = semantics_slice.shape[1]
-            new_text_length = text_tokens.shape[0]
-
-            semantics_slice = np.asarray(semantics_slice)
-            text_slice = np.asarray(text_tokens)
-
-
-            if sum(s.shape[1] for s in speaker_semantic_list) + sum(s.shape[0] for s in speaker_token_list) + new_semantic_length + new_text_length <= MAX_TOKEN_LENGTH:
-                speaker_token_list.append(text_slice)
-                speaker_semantic_list.append(semantics_slice)
-            else:
-                # 如果超过了 8192，先保存当前临时数组，清空后继续存储新数据
-                # if speaker_semantic_list:
-                #     save_semantic_to_writer(speaker_id, speaker_semantic_list, i)
-                
-                # 重新开始临时数组，并将当前的 semantics_slice 加入
-                #speaker_semantic_dict[speaker_id] = [semantics_slice]
-                temp_text_slice = []
-                for s in speaker_token_list:
-                    if len(temp_text_slice) == 0:
-                        temp_text_slice.extend(s.tolist())
-                    else:
-                        temp_text_slice.extend([enc.encode_single_token(" ")])
-                        temp_text_slice.extend(s.tolist())
-                temp_semantic_slice = None
-                for s in speaker_semantic_list:
-                    if temp_semantic_slice is None:
-                        temp_semantic_slice = s
-                    else:
-                        temp_semantic_slice = np.concatenate((temp_semantic_slice,s),axis=1)
-                string_prefix = "<|im_start|>user\n"
-                string_suffix = "<|im_end|><|im_start|>assistant\n"
-
-                encoded_prefix = enc.encode(
-                    string_prefix,
-                    allowed_special={"<|im_start|>","<|im_end|>"}
-                )
-
-                encoded_suffix = enc.encode(
-                    string_suffix,
-                    allowed_special={"<|im_start|>","<|im_end|>"}
-                )
+                semantics_slice = np.asarray(semantics_slice)
+                text_slice = np.asarray(text_tokens)
 
 
-                encoded = encoded_prefix + temp_text_slice + encoded_suffix
-                codebook_dim = 9
+                if sum(s.shape[1] for s in speaker_semantic_list) + sum(s.shape[0] for s in speaker_token_list) + new_semantic_length + new_text_length <= MAX_TOKEN_LENGTH:
+                    speaker_token_list.append(text_slice)
+                    speaker_semantic_list.append(semantics_slice)
+                else:
+                    # 如果超过了 8192，先保存当前临时数组，清空后继续存储新数据
+                    # if speaker_semantic_list:
+                    #     save_semantic_to_writer(speaker_id, speaker_semantic_list, i)
+                    
+                    # 重新开始临时数组，并将当前的 semantics_slice 加入
+                    #speaker_semantic_dict[speaker_id] = [semantics_slice]
+                    temp_text_slice = []
+                    for s in speaker_token_list:
+                        if len(temp_text_slice) == 0:
+                            temp_text_slice.extend(s.tolist())
+                        else:
+                            temp_text_slice.extend([enc.encode_single_token(" ")])
+                            temp_text_slice.extend(s.tolist())
+                    temp_semantic_slice = None
+                    for s in speaker_semantic_list:
+                        if temp_semantic_slice is None:
+                            temp_semantic_slice = s
+                        else:
+                            temp_semantic_slice = np.concatenate((temp_semantic_slice,s),axis=1)
+                    string_prefix = "<|im_start|>user\n"
+                    string_suffix = "<|im_end|><|im_start|>assistant\n"
 
-                semantic_token_id = enc.encode_single_token("<|semantic|>")
-                semantic_length = temp_semantic_slice.shape[1]
-                tokens = (
-                    encoded
-                    + [semantic_token_id] * semantic_length
-                    + [enc.encode_single_token("<|im_end|>")]
-                )
-                prompt_length = len(encoded)
-
-                
-                codes = np.pad(temp_semantic_slice,((0,0),(prompt_length,1)),constant_values=CODEBOOK_PAD_TOKEN_ID)
-                tokens = np.asarray(tokens)
-                codes = codes.transpose(1,0)
-                tokens = np.concatenate((tokens[...,np.newaxis],codes),axis=-1)
-                
-                
-                example = tf.train.Example(
-                        features=tf.train.Features(
-                            feature={
-                                'tokens': tf.train.Feature(bytes_list=tf.train.BytesList(value=[tf.io.serialize_tensor(tokens).numpy()]))
-                            }
-                        )
+                    encoded_prefix = enc.encode(
+                        string_prefix,
+                        allowed_special={"<|im_start|>","<|im_end|>"}
                     )
-                writer.write(example.SerializeToString())
 
-                speaker_semantic_dict[speaker_id] = [semantics_slice]
-                speaker_token_dict[speaker_id] = [text_slice]
+                    encoded_suffix = enc.encode(
+                        string_suffix,
+                        allowed_special={"<|im_start|>","<|im_end|>"}
+                    )
+
+
+                    encoded = encoded_prefix + temp_text_slice + encoded_suffix
+                    codebook_dim = 9
+
+                    semantic_token_id = enc.encode_single_token("<|semantic|>")
+                    semantic_length = temp_semantic_slice.shape[1]
+                    tokens = (
+                        encoded
+                        + [semantic_token_id] * semantic_length
+                        + [enc.encode_single_token("<|im_end|>")]
+                    )
+                    prompt_length = len(encoded)
+
+                    
+                    codes = np.pad(temp_semantic_slice,((0,0),(prompt_length,1)),constant_values=CODEBOOK_PAD_TOKEN_ID)
+                    tokens = np.asarray(tokens)
+                    codes = codes.transpose(1,0)
+                    tokens = np.concatenate((tokens[...,np.newaxis],codes),axis=-1)
+                    
+                    
+                    example = tf.train.Example(
+                            features=tf.train.Features(
+                                feature={
+                                    'tokens': tf.train.Feature(bytes_list=tf.train.BytesList(value=[tf.io.serialize_tensor(tokens).numpy()]))
+                                }
+                            )
+                        )
+                    writer.write(example.SerializeToString())
+
+                    speaker_semantic_dict[speaker_id] = [semantics_slice]
+                    speaker_token_dict[speaker_id] = [text_slice]
     # writer.close() 
