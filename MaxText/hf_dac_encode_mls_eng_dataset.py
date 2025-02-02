@@ -150,7 +150,7 @@ if __name__ == "__main__":
                 num = i//10240
                 if writer is not None:
                     writer.close() 
-                writer = ArrayRecordWriter(f"/home/blacksharkflying/bucket/dac_dataset_1/mls_eng_train_part_{num}.arrayrecord", 'group_size:1')
+                writer = ArrayRecordWriter(f"/dev/shm/dac_dataset_1/mls_eng_train_part_{num}.arrayrecord", 'group_size:1')
             
         semantics = encode_to_codes(jnp.expand_dims(item["audio"],1))
         i+=1
