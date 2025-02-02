@@ -19,7 +19,7 @@ from collections import defaultdict
 from jax.experimental.compilation_cache import compilation_cache as cc
 cc.set_cache_dir("/tmp/jax_cache")
 # disable_caching()
-os.environ["HF_DATASETS_IN_MEMORY_MAX_SIZE"]=str(1024*1024*1024*64)
+#os.environ["HF_DATASETS_IN_MEMORY_MAX_SIZE"]=str(1024*1024*1024*64)
 
 DEVICE = "tpu"
 MAX_LENGTH_AUDIO = 30 * 44100
