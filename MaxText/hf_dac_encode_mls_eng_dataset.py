@@ -138,7 +138,8 @@ if __name__ == "__main__":
     CODEBOOK_PAD_TOKEN_ID = 0
     MAX_TOKEN_LENGTH = 8000
     i = 0
-    writer = None
+    if jax.process_index() == 0:
+        writer = None
     speaker_semantic_dict = defaultdict(list)
     speaker_token_dict = defaultdict(list)
     os.makedirs("/dev/shm/dac_dataset_1",exist_ok=True)
