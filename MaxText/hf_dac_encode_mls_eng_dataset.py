@@ -145,7 +145,7 @@ if __name__ == "__main__":
     speaker_semantic_dict = defaultdict(list)
     speaker_token_dict = defaultdict(list)
     jitted_encode_to_codes = jax.jit(encode_to_codes,in_shardings=x_sharding,out_shardings=replicate_sharding)
-    os.makedirs("/dev/shm/dac_dataset_1",exist_ok=True)
+    os.makedirs("/home/fbsdev009/bucket/dac_dataset_1",exist_ok=True)
     for item in multihost_gen:
         print(f"round {i}",flush=True)
         if jax.process_index() == 0:
@@ -153,7 +153,7 @@ if __name__ == "__main__":
                 num = i//10240
                 if writer is not None:
                     writer.close() 
-                writer = ArrayRecordWriter(f"/dev/shm/dac_dataset_1/mls_eng_train_part_{num}.arrayrecord", 'group_size:1')
+                writer = ArrayRecordWriter(f"/home/fbsdev009/bucket/dac_dataset_1/mls_eng_train_part_{num}.arrayrecord", 'group_size:1')
             
         semantics = jitted_encode_to_codes(jnp.expand_dims(item["audio"],1))
         i+=1
