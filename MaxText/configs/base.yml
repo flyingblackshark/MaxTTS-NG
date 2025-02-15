@@ -339,7 +339,7 @@ hf_eval_split: ''
 hf_eval_files: ''
 hf_access_token: ''
 # for Grain input pipeline (dataset_type=grain)
-grain_train_files: '/root/bucket/dac_dataset_1/*.arrayrecord'
+grain_train_files: '/home/fbsdev009/bucket/dac_dataset_1/*.arrayrecord'
 grain_eval_files: ''
 grain_worker_count: 1
 
