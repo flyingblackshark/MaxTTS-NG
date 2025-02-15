@@ -372,35 +372,44 @@ class Decoder(nn.Module):
         policy=policy,
         static_argnums=(4, 5),  # Deterministic and model mode are static arguments.
     )
-    if cfg.using_pipeline_parallelism:
-      base_stage = RemattedBlockLayer if cfg.set_remat_policy_on_layers_per_stage else BlockLayer
-      stage_module = self.get_pipeline_stage_module(base_stage, cfg, mesh)
-      y = pipeline.Pipeline(config=cfg, mesh=mesh, layers=stage_module, remat_policy=policy)(
-          y,
-          decoder_segment_ids,
-          decoder_positions,
-          deterministic,
-          model_mode,
-      )
-    else:
-      if cfg.scan_layers:
-        y, _ = self.scan_decoder_layers(cfg, RemattedBlockLayer, cfg.num_decoder_layers, "layers", mesh)(
-            y,
-            decoder_segment_ids,
-            decoder_positions,
-            deterministic,
-            model_mode,
-        )
-      else:
-        for lyr in range(cfg.num_decoder_layers):
-          y = RemattedBlockLayer(config=cfg, mesh=mesh, name=f"layers_{lyr}", quant=self.quant)(
-              y,
-              decoder_segment_ids,
-              decoder_positions,
-              deterministic,
-              model_mode,
-          )
+    # if cfg.using_pipeline_parallelism:
+    #   base_stage = RemattedBlockLayer if cfg.set_remat_policy_on_layers_per_stage else BlockLayer
+    #   stage_module = self.get_pipeline_stage_module(base_stage, cfg, mesh)
+    #   y = pipeline.Pipeline(config=cfg, mesh=mesh, layers=stage_module, remat_policy=policy)(
+    #       y,
+    #       decoder_segment_ids,
+    #       decoder_positions,
+    #       deterministic,
+    #       model_mode,
+    #   )
+    # else:
+      # if cfg.scan_layers:
+      #   y, _ = self.scan_decoder_layers(cfg, RemattedBlockLayer, cfg.num_decoder_layers, "layers", mesh)(
+      #       y,
+      #       decoder_segment_ids,
+      #       decoder_positions,
+      #       deterministic,
+      #       model_mode,
+      #   )
+      # else:
+    decoder_layers = []
+    for lyr in range(cfg.num_decoder_layers):
+      decoder_layers.append(RemattedBlockLayer(config=cfg, mesh=mesh, name=f"layers_{lyr}", quant=self.quant))
 
+    if deterministic:
+      init_state = jnp.zeros_like(y.shape,y.dtype)
+    else:
+      init_state = jax.random.normal(jax.random.PRNGKey(0), y.shape, y.dtype)
+
+    input_embeds = y
+    x = xk = init_state
+    for i in range(cfg.num_steps):
+      xk = x
+      for lyr in decoder_layers:
+        lyr_input = jnp.concatenate((xk, input_embeds),axis=-1)
+        x = lyr(lyr_input, decoder_segment_ids, decoder_positions, deterministic, model_mode)
+
+    y = x
     y = self.get_norm_layer()(
         dtype=cfg.dtype,
         weight_dtype=cfg.weight_dtype,
@@ -411,32 +420,48 @@ class Decoder(nn.Module):
     y = nn.Dropout(rate=cfg.dropout_rate, broadcast_dims=(-2,))(y, deterministic=deterministic)
 
     # [batch, length, emb_dim] -> [batch, length, vocab_size]
-    if cfg.logits_via_embedding:
-      # Use the transpose of embedding matrix for logit transform.
-      logits = self.shared_embedding.attend(y)
-      if self.config.normalize_embedding_logits:
-        # Correctly normalize pre-softmax logits for this shared case.
-        logits = logits / jnp.sqrt(y.shape[-1])
-      if cfg.final_logits_soft_cap:
-        logits = logits / cfg.final_logits_soft_cap
-        logits = jnp.tanh(logits) * cfg.final_logits_soft_cap
-    else:
-      logits = linears.DenseGeneral(
-          cfg.vocab_size,
-          weight_dtype=cfg.weight_dtype,
-          dtype=jnp.float32 if cfg.logits_dot_in_fp32 else cfg.dtype,  # for logit training stability
-          kernel_axes=("embed", "vocab"),
-          name="logits_dense",
-          matmul_precision=self.config.matmul_precision,
-      )(
-          y
-      )  # We do not quantize the logits matmul.
+    # if cfg.logits_via_embedding:
+    #   # Use the transpose of embedding matrix for logit transform.
+    #   logits = self.shared_embedding.attend(y)
+    #   if self.config.normalize_embedding_logits:
+    #     # Correctly normalize pre-softmax logits for this shared case.
+    #     logits = logits / jnp.sqrt(y.shape[-1])
+    #   if cfg.final_logits_soft_cap:
+    #     logits = logits / cfg.final_logits_soft_cap
+    #     logits = jnp.tanh(logits) * cfg.final_logits_soft_cap
+    # else:
+    logits = linears.DenseGeneral(
+        cfg.vocab_size,
+        weight_dtype=cfg.weight_dtype,
+        dtype=jnp.float32 if cfg.logits_dot_in_fp32 else cfg.dtype,  # for logit training stability
+        kernel_axes=("embed", "vocab"),
+        name="logits_dense",
+        matmul_precision=self.config.matmul_precision,
+    )(
+        y
+    )  # We do not quantize the logits matmul.
+    uni_logits_lyr = linears.DenseGeneral(
+        cfg.vocab_size,
+        weight_dtype=cfg.weight_dtype,
+        dtype=jnp.float32 if cfg.logits_dot_in_fp32 else cfg.dtype,  # for logit training stability
+        kernel_axes=("embed", "vocab"),
+        name="logits_dense",
+        matmul_precision=self.config.matmul_precision,
+    )
+    codebook_logits = []
+    for i in range(cfg.codebook_dim):
+      codebook_logits.append(uni_logits_lyr(y))
+    codebook_logits = jnp.stack(codebook_logits,axis=-1)
     logits = nn.with_logical_constraint(
         logits, ("activation_embed_and_logits_batch", "activation_length", "activation_vocab")
     )
+    codebook_logits = nn.with_logical_constraint(
+        codebook_logits, ("activation_embed_and_logits_batch", "activation_length")
+    )
     if self.config.cast_logits_to_fp32:
       logits = logits.astype(jnp.float32)
-    return logits
+      codebook_logits = codebook_logits.astype(jnp.float32)
+    return logits,codebook_logits
 
 
 class Transformer(nn.Module):
