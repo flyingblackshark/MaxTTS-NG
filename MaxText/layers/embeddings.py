@@ -92,6 +92,7 @@ class Embed(nn.Module):
       output_codebook = jnp.asarray(self.codebook_embedding, self.dtype)[inputs[:,: ,i + 1] + i * cfg.codebook_size]
       output_codebook = jnp.where(jnp.expand_dims(inputs[:,:, 0] != cfg.semantic_token_id,-1),0,output_codebook)
       output_vocab.append(output_codebook)
+    output = jnp.stack(output_vocab,axis=3)
     output = jnp.sum(output,axis=3)
     output = nn.with_logical_constraint(
         output, ("activation_embed_and_logits_batch", "activation_length", "activation_embed")

@@ -277,7 +277,7 @@ class Decoder(nn.Module):
   ):
     cfg = self.config
     mesh = self.mesh
-    assert decoder_input_tokens.ndim == 2  # [batch, len]
+    assert decoder_input_tokens.ndim == 3  # [batch, len]
 
     # [batch, length] -> [batch, length, emb_dim]
     y = self.shared_embedding(decoder_input_tokens.astype("int32"))
@@ -402,11 +402,10 @@ class Decoder(nn.Module):
       init_state = jax.random.normal(jax.random.PRNGKey(0), y.shape, y.dtype)
 
     input_embeds = y
-    x = xk = init_state
+    x = init_state
     for i in range(cfg.num_steps):
-      xk = x
       for lyr in decoder_layers:
-        lyr_input = jnp.concatenate((xk, input_embeds),axis=-1)
+        lyr_input = x + input_embeds
         x = lyr(lyr_input, decoder_segment_ids, decoder_positions, deterministic, model_mode)
 
     y = x
@@ -440,17 +439,18 @@ class Decoder(nn.Module):
     )(
         y
     )  # We do not quantize the logits matmul.
-    uni_logits_lyr = linears.DenseGeneral(
-        cfg.vocab_size,
+
+    codebook_logits = []
+    for i in range(cfg.codebook_dim):
+      codebook_logit = linears.DenseGeneral(
+        cfg.codebook_size,
         weight_dtype=cfg.weight_dtype,
         dtype=jnp.float32 if cfg.logits_dot_in_fp32 else cfg.dtype,  # for logit training stability
         kernel_axes=("embed", "vocab"),
-        name="logits_dense",
+        name=f"codebook_logits_dense_{i}",
         matmul_precision=self.config.matmul_precision,
-    )
-    codebook_logits = []
-    for i in range(cfg.codebook_dim):
-      codebook_logits.append(uni_logits_lyr(y))
+      )(y)
+      codebook_logits.append(codebook_logit)
     codebook_logits = jnp.stack(codebook_logits,axis=-1)
     logits = nn.with_logical_constraint(
         logits, ("activation_embed_and_logits_batch", "activation_length", "activation_vocab")
@@ -506,11 +506,11 @@ class Transformer(nn.Module):
           f" which is always {common_types.DECODING_ACTIVE_SEQUENCE_INDICATOR}."
       )
 
-    logits = self.decoder(
+    logits,codebook_logits = self.decoder(
         decoder_input_tokens=decoder_input_tokens,
         decoder_positions=decoder_positions,
         decoder_segment_ids=decoder_segment_ids,
         deterministic=not enable_dropout,
         model_mode=model_mode,
     )
-    return logits
+    return logits,codebook_logits

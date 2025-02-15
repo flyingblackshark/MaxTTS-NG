@@ -26,9 +26,9 @@
       "python": "python3",
       "program": "${workspaceFolder}/MaxText/train.py",
       "args": ["MaxText/configs/base.yml", 
-               "run_name=runner_$(date +%Y-%m-%d-%H-%M)", 
-               "base_output_directory=gs://test-maxtext-output",
-               "dataset_path=gs://test-maxtext-dataset",
+               "run_name=test1", 
+               "base_output_directory=gs://fbs-us2/test-maxtext-output",
+               "dataset_path=gs://fbs-us2/dac_dataset_1",
                "steps=2",
                "enable_checkpointing=false"]
     },

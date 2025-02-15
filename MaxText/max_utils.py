@@ -658,10 +658,11 @@ def init_initial_state(model, tx, config, is_training, key):
 
   Args: model, tx, config, is_training, key
   """
+  code_input_shape = (config.micro_batch_size_to_train_on, config.max_target_length, config.codebook_dim + 1)
   input_shape = (config.micro_batch_size_to_train_on, config.max_target_length)
   model_vars = model.init(
       {"params": key, "dropout": key, "aqt": key},
-      np.ones(input_shape, dtype=jnp.int32),
+      np.ones(code_input_shape, dtype=jnp.int32),
       np.ones(input_shape, dtype=jnp.int32),
   )
   if is_training:

@@ -154,7 +154,7 @@ pipeline_delay_activation_forwarding: False # This delays the activation forward
 # settings below of scanning and setting a remat policy only over the pipeline iterations.
 # It may be useful to do the reverse when the layers_per_stage is very large.
 # The below settings only have effect when using pipeline parallelism.
-scan_pipeline_iterations: True
+scan_pipeline_iterations: False
 # The layers per stage scanning option is set by scan_layers, we recommend setting scan_layers=False
 set_remat_policy_on_pipeline_iterations: True
 set_remat_policy_on_layers_per_stage: False
@@ -179,7 +179,7 @@ qkv_proj: 'remat'
 out_proj: 'remat'
 
 optimizer_memory_host_offload: False
-scan_layers: True # We recommend setting this to false when using pipeline parallelism, instead scanning the PP iterations.
+scan_layers: False # We recommend setting this to false when using pipeline parallelism, instead scanning the PP iterations.
 param_scan_axis: 1
 
 # The attention parameter dictates the specific algorithm/methodology used to compute the attention scores
@@ -305,10 +305,10 @@ num_slices: -1
 # Tokenizer
 vocab_size: 32_000 # powers of 2 for sharding
 tokenizer_path: "assets/tokenizer.llama2"
-tokenize_train_data: True  # False if the dataset is pre-tokenized
-tokenize_eval_data: True  # False if the dataset is pre-tokenized
-add_bos: True
-add_eos: True
+tokenize_train_data: False  # False if the dataset is pre-tokenized
+tokenize_eval_data: False  # False if the dataset is pre-tokenized
+add_bos: False
+add_eos: False
 
 # Dataset
 per_device_batch_size: 12.0
@@ -325,7 +325,7 @@ dpo_beta: 0.1
 
 # dataset_type must be synthetic, hf, grain, tfds
 # details in: https://github.com/google/maxtext/blob/main/getting_started/Data_Input_Pipeline.md
-dataset_type: tfds
+dataset_type: grain
 # for TFDS input pipeline (dataset_type=tfds)
 dataset_path: "" # your path given as argument in download_dataset.sh, e.g. "gs://my-maxtext-dataset/"
 dataset_name: 'c4/en:3.0.1'
@@ -339,7 +339,7 @@ hf_eval_split: ''
 hf_eval_files: ''
 hf_access_token: ''
 # for Grain input pipeline (dataset_type=grain)
-grain_train_files: ''
+grain_train_files: '/root/bucket/dac_dataset_1/*.arrayrecord'
 grain_eval_files: ''
 grain_worker_count: 1
 
