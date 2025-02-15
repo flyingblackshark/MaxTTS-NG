@@ -546,4 +546,4 @@ sa_v_layout: "HEAD_DIM_MINOR"
 semantic_token_id: 100266
 codebook_dim: 9
 codebook_size: 1024
-num_steps: 8
+num_steps: 1
