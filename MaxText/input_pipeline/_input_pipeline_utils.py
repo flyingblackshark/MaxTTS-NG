@@ -176,18 +176,23 @@ class ParseFeatures(grain.MapTransform):
 
   def __init__(self, data_columns, tokenize):
     self.data_columns = data_columns
-    if tokenize:
-      self.dtype = tf.string
-    else:
-      self.dtype = tf.int64
+    # if tokenize:
+    #   self.dtype = tf.string
+    # else:
+    #   self.dtype = tf.int64
 
   def map(self, features):
     def _parse(example):
-      parsed = tf.io.parse_example(
-          example,
-          {col: tf.io.FixedLenSequenceFeature([], dtype=self.dtype, allow_missing=True) for col in self.data_columns},
-      )
-      return parsed
+      # parsed = tf.io.parse_example(
+      #     example,
+      #     {col: tf.io.FixedLenFeature([], dtype=tf.string, allow_missing=False) for col in self.data_columns},
+      # )
+      parsed = tf.io.parse_example(features, {
+        "tokens": tf.io.FixedLenFeature([], dtype=tf.string)
+      })
+      return {
+        "tokens": tf.io.parse_tensor(parsed["tokens"],tf.int64)
+      }
 
     return _parse(features)
 
@@ -200,7 +205,7 @@ class InputsTargetsFeatures(grain.MapTransform):
     self.column_name = column_name
 
   def map(self, features):
-    return {"inputs": features[self.column_name], "targets": features[self.column_name]}
+    return {"inputs": features[self.column_name][:-1], "targets": features[self.column_name][1:]}
 
 
 @dataclasses.dataclass
@@ -251,7 +256,7 @@ class PadToMaxLength(grain.MapTransform):
 
     data_columns = list(data.keys())
     for data_column in data_columns:
-      data[f"{data_column}_segmentation"] = (data[data_column] != 0).astype(np.int32)
+      data[f"{data_column}_segmentation"] = (data[data_column][...,0] != 0).astype(np.int32)
       data[f"{data_column}_position"] = np.arange(data[data_column].shape[0], dtype=np.int32)
     for key, _ in data.items():
       data[key] = _pad(data[key], self.max_length)
@@ -274,12 +279,12 @@ def shift_and_refine(x, axis=1):
   """Shift inputs, set segmentation to 0 when target element is 0.
   Replace EOS by 0 for packed inputs."""
   x["inputs"] = shift_right(x["inputs"], axis=axis)
-  targets_nonzero = x["targets"] != 0
+  targets_nonzero = x["targets"][...,0] != 0
   x["inputs_segmentation"] *= targets_nonzero
   x["targets_segmentation"] *= targets_nonzero
   # For packed targets, the first shifted token of a new sequence is made
   # 0, rather than being the EOS token for the last sequence.
-  x["inputs"] *= x["inputs_segmentation"] == shift_right(x["inputs_segmentation"], axis=axis)
+  x["inputs"] *= np.expand_dims(x["inputs_segmentation"] == shift_right(x["inputs_segmentation"], axis=axis),-1)
 
   return x
 

@@ -86,8 +86,8 @@ def preprocessing_pipeline(
     operations.append(grain.Batch(batch_size=global_batch_size // jax.process_count(), drop_remainder=drop_remainder))
 
   # Shift inputs for teacher-forced training
-  if shift and not use_dpo:
-    operations.append(_input_pipeline_utils.ShiftData(axis=1))
+  # if shift and not use_dpo:
+  #   operations.append(_input_pipeline_utils.ShiftData(axis=1))
 
   index_sampler = grain.IndexSampler(
       num_records=len(dataset),

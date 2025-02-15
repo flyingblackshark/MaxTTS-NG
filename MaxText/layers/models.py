@@ -451,7 +451,7 @@ class Decoder(nn.Module):
         matmul_precision=self.config.matmul_precision,
       )(y)
       codebook_logits.append(codebook_logit)
-    codebook_logits = jnp.stack(codebook_logits,axis=-1)
+    codebook_logits = jnp.stack(codebook_logits,axis=-2)
     logits = nn.with_logical_constraint(
         logits, ("activation_embed_and_logits_batch", "activation_length", "activation_vocab")
     )

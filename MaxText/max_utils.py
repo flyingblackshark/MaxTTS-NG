@@ -828,6 +828,33 @@ def create_learning_rate_schedule(config):
 
   return optax.join_schedules(pieces, boundaries)
 
+def cross_entropy_with_logits_codebook(logits: jnp.ndarray, targets: jnp.ndarray, z_loss: float) -> Tuple[jnp.ndarray, jnp.ndarray]:
+  """Computes cross entropy loss with stable custom gradient.
+  Computes a stabilized-gradient version of:
+    -jnp.sum(targets * nn.log_softmax(logits), axis=-1)
+  If z_loss > 0, then an auxiliary loss equal to z_loss*log(z)^2
+  will be added to the cross entropy loss (z = softmax normalization constant).
+  The two uses of z_loss are:
+  1. To keep the logits from drifting too far from zero, which can cause
+     unacceptable roundoff errors in bfloat16.
+  2. To encourage the logits to be normalized log-probabilities.
+  Args:
+    logits: [batch, length, num_classes] float array.
+    targets: categorical one-hot targets [batch, length, num_classes] float
+      array.
+    z_loss: coefficient for auxiliary z-loss loss term.
+  Returns:
+    tuple with the total loss and the z_loss, both
+    float arrays with shape [batch, length].
+  """
+  logits_sum = jax.scipy.special.logsumexp(logits, axis=-1, keepdims=True)
+  log_softmax = logits - logits_sum
+  loss = -jnp.sum(targets * log_softmax, axis=-1)
+  # Add auxiliary z-loss term.
+  log_z = jnp.squeeze(logits_sum, axis=-1)
+  total_z_loss = z_loss * jax.lax.square(log_z)
+  loss += total_z_loss
+  return loss, total_z_loss
 
 # Cross entropy implementation is taken from original T5X codebase:
 # https://github.com/google-research/t5x/blob/ace831eea1e2742b4299cd1a9af7e4f302038351/t5x/losses.py#L25-L101
