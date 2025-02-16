@@ -399,7 +399,7 @@ class Decoder(nn.Module):
     if deterministic:
       init_state = jnp.zeros_like(y.shape,y.dtype)
     else:
-      init_state = jax.random.normal(jax.random.PRNGKey(0), y.shape, y.dtype)
+      init_state = jax.random.normal(self.make_rng('params'), y.shape, y.dtype)
 
     input_embeds = y
     x = init_state
