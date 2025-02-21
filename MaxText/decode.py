@@ -145,15 +145,31 @@ def main(argv: Sequence[str]) -> None:
     rng, rng_generate = jax.random.split(rng)
     decode_state, sampled_tokens = engine.generate(params, decode_state, rng=rng_generate)
     sampled_tokens_list.append(sampled_tokens)
+  results = [sampled_tokens.get_result_at_slot(slot).tokens[0].squeeze(0) for sampled_tokens in sampled_tokens_list]
+  results = jnp.stack(results,axis=0)[:,1:]   
+  import dac_jax
+  import soundfile as sf
+  dac_model, variables = dac_jax.load_model(model_type="44khz")
+  @jax.jit
+  def decode_from_codes(codes: jnp.ndarray):
+      recons = dac_model.apply(
+          variables,
+          codes,
+          None,
+          None,
+          method="decode",
+      )
+      return recons
+  audio_output = decode_from_codes(jnp.expand_dims(results.transpose(1,0),0)).squeeze((0,1) )
+  sf.write("test.wav",audio_output,samplerate=44100)
+  # results = [sampled_tokens.get_result_at_slot(slot).tokens.item() for sampled_tokens in sampled_tokens_list]
+  # output = tokenizer_model.decode(results)
+  # print(f"Input `{text}` -> `{output}`")
 
-  results = [sampled_tokens.get_result_at_slot(slot).tokens.item() for sampled_tokens in sampled_tokens_list]
-  output = tokenizer_model.decode(results)
-  print(f"Input `{text}` -> `{output}`")
-
-  if config.autoregressive_decode_assert != "":
-    assert (
-        output == config.autoregressive_decode_assert
-    ), f"generated text mismatch {output=} {config.autoregressive_decode_assert=}"
+  # if config.autoregressive_decode_assert != "":
+  #   assert (
+  #       output == config.autoregressive_decode_assert
+  #   ), f"generated text mismatch {output=} {config.autoregressive_decode_assert=}"
 
 
 def validate_config(config):
