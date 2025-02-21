@@ -14,7 +14,10 @@
                "load_parameters_path=gs://fbs-us2/test-maxtext-output/test5/checkpoints/150000/items",
                "base_output_directory=gs://fbs-us2/test-maxtext-output",
                "dataset_path=gs://test-maxtext-dataset",
-               "attention=dot_product"]
+               "attention=dot_product",
+               "ici_fsdp_parallelism=1",
+               "ici_tensor_parallelism=-1",
+               "ici_autoregressive_parallelism=1",]
     },
     {
       "name": "Debug MaxText Train",
