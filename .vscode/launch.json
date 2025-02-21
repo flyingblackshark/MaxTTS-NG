@@ -10,12 +10,11 @@
       "python": "python3",
       "program": "${workspaceFolder}/MaxText/decode.py",
       "args": ["MaxText/configs/base.yml", 
-               "run_name=runner_$(date +%Y-%m-%d-%H-%M)", 
-               "base_output_directory=gs://test-maxtext-output",
+               "run_name=test5", 
+               "load_parameters_path=gs://fbs-us2/test-maxtext-output/test5/checkpoints/150000/items",
+               "base_output_directory=gs://fbs-us2/test-maxtext-output",
                "dataset_path=gs://test-maxtext-dataset",
-               "steps=2",
-               "attention=dot_product",
-               "enable_checkpointing=false"]
+               "attention=dot_product"]
     },
     {
       "name": "Debug MaxText Train",

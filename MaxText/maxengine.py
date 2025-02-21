@@ -245,7 +245,7 @@ class MaxEngine(engine_api.Engine):
 
     rng, new_rng = jax.random.split(rng)
     with self._mesh, nn_partitioning.axis_rules(self.config.logical_axis_rules):
-      flat_logits, new_vars = self.model.apply(
+      (flat_logits,codebook_flat_logits), new_vars = self.model.apply(
           params,
           input_tokens,
           positions,
@@ -257,13 +257,17 @@ class MaxEngine(engine_api.Engine):
       )
 
     next_pos = jnp.full((1, 1), true_length, dtype=jnp.int32)
-    generated_tokens = jnp.zeros((1, 1), dtype=jnp.int32)
+    generated_tokens = jnp.zeros((1, 1, self.config.codebook_dim+1), dtype=jnp.int32)
     selected_logits = jax.lax.dynamic_slice(
         flat_logits,
         (0, true_length - 1, 0),
         (flat_logits.shape[0], 1, flat_logits.shape[2]),
     )
+    selected_codebook_logits = jax.lax.dynamic_slice(
+        codebook_flat_logits, (0, true_length - 1, 0,0), (codebook_flat_logits.shape[0], 1, codebook_flat_logits.shape[2],codebook_flat_logits.shape[3])
+    )
     selected_logits = jax.lax.with_sharding_constraint(selected_logits, self.replicated_sharding)
+    selected_codebook_logits = jax.lax.with_sharding_constraint(selected_codebook_logits, self.replicated_sharding)
 
     # sampling first token
     first_generated_token = inference_utils.sampling(
@@ -275,7 +279,20 @@ class MaxEngine(engine_api.Engine):
         temperature=self.config.decode_sampling_temperature,
     )
 
+
+    codebook_generated_token = inference_utils.sampling(
+      selected_codebook_logits,
+      rng,
+      self.config.decode_sampling_strategy,
+      topk=self.config.decode_sampling_top_k,
+      nucleus_topp=self.config.decode_sampling_nucleus_p,
+      temperature=self.config.decode_sampling_temperature,
+    )
+
+    first_generated_token = jnp.concatenate((jnp.expand_dims(first_generated_token,-1),codebook_generated_token),axis=-1)
+
     all_valid = jnp.ones(first_generated_token.shape, dtype=jnp.int8)
+    
     result = engine_api.ResultTokens(
         data=jnp.concatenate((first_generated_token, all_valid, generated_tokens), axis=1),
         # Tokens are shape [batch, speculations], so when we concatenate
@@ -423,7 +440,7 @@ class MaxEngine(engine_api.Engine):
     rng, new_rng = jax.random.split(rng)
     # run one step generation
     with self._mesh, nn_partitioning.axis_rules(self.config.logical_axis_rules):
-      out_logits, new_vars = self.model.apply(
+      (out_logits,out_codebook_logits), new_vars = self.model.apply(
           params | {"cache": decode_state["cache"]},
           previous_token,
           decode_state["next_pos"],
@@ -434,6 +451,7 @@ class MaxEngine(engine_api.Engine):
       )
 
     out_logits = jax.lax.with_sharding_constraint(out_logits, self.replicated_sharding)
+    out_codebook_logits = jax.lax.with_sharding_constraint(out_codebook_logits, self.replicated_sharding)
     new_cache = jax.lax.with_sharding_constraint(new_vars["cache"], self.kv_cache_shardings)
 
     # sampling tokens
@@ -717,13 +735,17 @@ class MaxEngine(engine_api.Engine):
     # pylint: disable=unused-argument
     def init(abstract_params):
       x = jnp.ones(
+          (int(self.config.per_device_batch_size * jax.device_count()), 1 ,self.config.codebook_dim + 1),
+          dtype=jnp.int32,
+      )
+      x2 = jnp.ones(
           (int(self.config.per_device_batch_size * jax.device_count()), 1),
           dtype=jnp.int32,
       )
       _, cache = self.model.apply(
           abstract_params,
           x,
-          x,
+          x2,
           enable_dropout=False,
           model_mode=common_types.MODEL_MODE_AUTOREGRESSIVE,
           rngs={"params": rng},
@@ -735,11 +757,11 @@ class MaxEngine(engine_api.Engine):
           dtype=jnp.int32,
       )
       generated_tokens = jnp.zeros(
-          (int(self.config.per_device_batch_size * jax.device_count()), 1),
+          (int(self.config.per_device_batch_size * jax.device_count()), 1 , self.config.codebook_dim + 1),
           dtype=jnp.int32,
       )
       tokens = jnp.zeros(
-          (int(self.config.per_device_batch_size * jax.device_count()), 1),
+          (int(self.config.per_device_batch_size * jax.device_count()), 1 , self.config.codebook_dim + 1),
           dtype=jnp.int32,
       )
       return {

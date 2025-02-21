@@ -24,7 +24,71 @@ import pyconfig
 
 from typing import Sequence
 from absl import app
+import jax.numpy as jnp
+from jax.experimental.compilation_cache import compilation_cache as cc
+import tiktoken
+cc.set_cache_dir("./jax_cache")
+CODEBOOK_PAD_TOKEN_ID = 0
 
+def encode_tokens(
+    tokenizer,
+    string,
+    prompt_tokens=None,
+    num_codebooks=9,
+):
+    #string = clean_text(string)
+    string = f"<|im_start|>user\n{string}<|im_end|><|im_start|>assistant\n"
+
+    new_tokens = tokenizer.encode(
+       text=string,
+       allowed_special={"<|im_start|>","<|im_end|>"}
+       )
+    tokens = jnp.asarray([new_tokens], dtype=jnp.int32)
+    true_length = tokens.shape[1]
+    # Codebooks
+    zeros = (
+        jnp.ones((num_codebooks, tokens.shape[1]), dtype=jnp.int32)
+        * CODEBOOK_PAD_TOKEN_ID
+    )
+    prompt = jnp.concatenate((tokens, zeros), axis=0)
+
+    if prompt_tokens is None:
+        return prompt,true_length
+
+    # Get prompt tokens
+    # if prompt_tokens.ndim == 3:
+    #     assert (
+    #         prompt_tokens.shape[0] == 1
+    #     ), f"3 dim prompt tokens should have shape (1, num_codebooks, seq_len)"
+    #     prompt_tokens = prompt_tokens[0]
+
+    # assert prompt_tokens.ndim == 2
+    data = prompt_tokens
+
+    # if prompt_tokens.shape[0] > num_codebooks:
+    #     logger.warning(
+    #         f"Prompt tokens shape {prompt_tokens.shape} is larger than num_codebooks {num_codebooks}, getting first {num_codebooks} codebooks"
+    #     )
+    #     data = data[:num_codebooks]
+
+    # Add pad token for each codebook
+    data = jnp.concatenate(
+        (data, jnp.zeros((data.shape[0], 1), dtype=jnp.int32)),
+        axis=1,
+    )
+
+    # Since 1.0, we use <|semantic|>
+    s0_token_id = tokenizer.convert_tokens_to_ids("<|semantic|>")
+    end_token_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
+    main_token_ids = (
+        jnp.ones((1, data.shape[1]), dtype=jnp.int32) * s0_token_id
+    )
+    main_token_ids = main_token_ids.at[0, -1].set(end_token_id)
+
+    data = jnp.concatenate((main_token_ids, data), axis=0)
+    prompt = jnp.concatenate((prompt, data), axis=1)
+    true_length = prompt.shape[1]
+    return prompt,true_length
 
 def main(argv: Sequence[str]) -> None:
   jax.config.update("jax_default_prng_impl", "unsafe_rbg")
@@ -41,15 +105,33 @@ def main(argv: Sequence[str]) -> None:
   params = engine.load_params(rng_load_params)
 
   text = config.prompt
-  metadata = engine.get_tokenizer()
-  tokenizer_model = engine.build_tokenizer(metadata)
-  tokens, true_length = tokenizer_model.encode(text, is_bos=True, prefill_lengths=[config.max_prefill_predict_length])
-  assert true_length <= config.max_prefill_predict_length, "can't take too many tokens"
-  assert config.quantization != "fp8", "fp8 on NVIDIA GPUs is not supported in decode.py yet"
+      
+  cl100k_base = tiktoken.get_encoding("cl100k_base")
 
+  tokenizer_model = tiktoken.Encoding(
+      name="cl100k_im",
+      pat_str=cl100k_base._pat_str,
+      mergeable_ranks=cl100k_base._mergeable_ranks,
+      special_tokens={
+          **cl100k_base._special_tokens,
+          "<|im_start|>": 100264,
+          "<|im_end|>": 100265,
+          "<|semantic|>": 100266,
+      }
+  )
+  # metadata = engine.get_tokenizer()
+  # tokenizer_model = engine.build_tokenizer(metadata)
+  # tokens, true_length = tokenizer_model.encode(text, is_bos=True, prefill_lengths=[config.max_prefill_predict_length])
+  # assert true_length <= config.max_prefill_predict_length, "can't take too many tokens"
+  # assert config.quantization != "fp8", "fp8 on NVIDIA GPUs is not supported in decode.py yet"
+  tokens,true_length = encode_tokens(tokenizer_model,text)
+  tokens = tokens.transpose(1,0)
+  padding = config.max_prefill_predict_length - tokens.shape[0]
+  #true_length = true_length + true_length_prompt
+  padded_tokens = jnp.pad(tokens, ((0, padding),(0,0)))
   # Split RNG before calling prefill
   rng, rng_prefill = jax.random.split(rng)
-  prefill_result, first_token = engine.prefill(params=params, padded_tokens=tokens, true_length=true_length, rng=rng_prefill)
+  prefill_result, first_token = engine.prefill(params=params, padded_tokens=padded_tokens, true_length=true_length, rng=rng_prefill)
   slot = 0
 
   rng, rng_init_decode = jax.random.split(rng)

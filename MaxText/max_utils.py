@@ -983,6 +983,11 @@ def get_prefill_kv_cache_annotations(model, config, rng, mesh):
   """Get a shaped abstraction of the state (including optimizer)"""
 
   def init_kv_cache(model, config):
+    input_shape_q = (
+        config.global_batch_size_to_load,
+        config.max_prefill_predict_length,
+        config.codebook_dim + 1,
+    )
     input_shape = (
         config.global_batch_size_to_load,
         config.max_prefill_predict_length,
@@ -990,7 +995,7 @@ def get_prefill_kv_cache_annotations(model, config, rng, mesh):
 
     model_vars = model.init(
         {"params": rng, "dropout": rng, "aqt": rng},
-        jnp.ones(input_shape),
+        jnp.ones(input_shape_q),
         jnp.ones(input_shape),
         model_mode=common_types.MODEL_MODE_PREFILL,
     )
@@ -1009,6 +1014,11 @@ def get_kv_cache_annotations(model, config, rng, mesh):
   """Get a shaped abstraction of the state (including optimizer)"""
 
   def init_kv_cache(model, config):
+    input_shape_q = (
+        config.global_batch_size_to_load,
+        1,
+        config.codebook_dim + 1,
+    )
     input_shape = (
         config.global_batch_size_to_load,
         1,
@@ -1016,7 +1026,7 @@ def get_kv_cache_annotations(model, config, rng, mesh):
 
     model_vars = model.init(
         {"params": rng, "dropout": rng, "aqt": rng},
-        jnp.ones(input_shape),
+        jnp.ones(input_shape_q),
         jnp.ones(input_shape),
         model_mode=common_types.MODEL_MODE_AUTOREGRESSIVE,
     )

@@ -397,7 +397,7 @@ class Decoder(nn.Module):
       decoder_layers.append(RemattedBlockLayer(config=cfg, mesh=mesh, name=f"layers_{lyr}", quant=self.quant))
 
     if deterministic:
-      init_state = jnp.zeros_like(y.shape,y.dtype)
+      init_state = jnp.zeros(y.shape,y.dtype)
     else:
       init_state = jax.random.normal(self.make_rng('params'), y.shape, y.dtype)
 
