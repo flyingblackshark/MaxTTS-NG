@@ -59,12 +59,12 @@ class Embed(nn.Module):
         (self.num_embeddings, self.features),
         self.config.weight_dtype,
     )
-    self.codebook_embedding = self.param(
-        "codebook_embedding",
+    self.codebook_embedding_tables = [self.param(
+        f"codebook_embedding_{i}",
         with_logical_partitioning(self.embedding_init, ("vocab", "embed")),
-        (self.config.codebook_dim * self.config.codebook_size, self.features),
+        (self.config.codebook_size, self.features),
         self.config.weight_dtype,
-    )
+    ) for i in range(self.config.codebook_dim)]
 
   def __call__(self, inputs: Array) -> Array:
     """Embeds the inputs along the last dimension.
@@ -88,9 +88,10 @@ class Embed(nn.Module):
     #   output = jnp.dot(one_hot, jnp.asarray(self.embedding, self.dtype))
     # else:
     output_vocab = [jnp.asarray(self.embedding, self.dtype)[inputs[:,:, 0]]]
+    codebook_mask = (inputs[:,:, 0] == cfg.semantic_token_id)[...,jnp.newaxis]
     for i in range(cfg.codebook_dim):
-      output_codebook = jnp.asarray(self.codebook_embedding, self.dtype)[inputs[:,: ,i + 1] + i * cfg.codebook_size]
-      output_codebook = jnp.where(jnp.expand_dims(inputs[:,:, 0] != cfg.semantic_token_id,-1),0,output_codebook)
+      output_codebook = jnp.asarray(self.codebook_embedding[i], self.dtype)[inputs[:,: ,i + 1]]
+      output_codebook = output_codebook * codebook_mask
       output_vocab.append(output_codebook)
     output = jnp.stack(output_vocab,axis=3)
     output = jnp.sum(output,axis=3)
