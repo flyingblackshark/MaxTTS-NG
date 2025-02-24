@@ -28,6 +28,7 @@ MAX_LENGTH_TEXT = 10000
 PER_DEVICE_BATCH_SIZE = 4
 #GLOBAL_BATCH_SIZE = PER_DEVICE_BATCH_SIZE * jax.device_count()
 #SOURCE_SAMPLERATE = 16000
+READ_NUM_THREADS = 8
 IS_CONCATED = False
 
 class HFParseAudioFeatures(grain.MapTransform):
@@ -133,7 +134,7 @@ if __name__ == "__main__":
         sampler=dummy_index_sampler,
         worker_count=1,  # only supports one worker for now, more workers results in duplicated data
         worker_buffer_size=1,
-        read_options=grain.ReadOptions(num_threads=1, prefetch_buffer_size=128),
+        read_options=grain.ReadOptions(num_threads=READ_NUM_THREADS, prefetch_buffer_size=128),
     )
     
 
