@@ -17,6 +17,7 @@ import tiktoken
 #from datasets import disable_caching
 from collections import defaultdict
 from jax.experimental.compilation_cache import compilation_cache as cc
+import io
 cc.set_cache_dir("/tmp/jax_cache")
 # disable_caching()
 #os.environ["HF_DATASETS_IN_MEMORY_MAX_SIZE"]=str(1024*1024*1024*64)
@@ -32,7 +33,8 @@ IS_CONCATED = False
 class HFParseAudioFeatures(grain.MapTransform):
   """Normalize feature keys for HuggingFace input"""
   def map(self, features):
-    audio_44k = librosa.resample(features["audio"]["array"], orig_sr=SOURCE_SAMPLERATE, target_sr=44100)
+    audio_44k,sr = librosa.load(io.BytesIO(features["audio"]["bytes"]),sr=44100)
+    #audio_44k = librosa.resample(features["audio"]["array"], orig_sr=SOURCE_SAMPLERATE, target_sr=44100)
     return {
         "audio": np.asarray(audio_44k, dtype=np.float32),
         "text": np.asarray(features["text"], dtype=np.int32),
@@ -59,7 +61,7 @@ if __name__ == "__main__":
     device_mesh = mesh_utils.create_device_mesh((jax.device_count(), 1))
     mesh = Mesh(device_mesh, axis_names=("data", "model")) 
     dataset = datasets.load_dataset(
-        "/home/fbsdev009/bucket/mls_eng_full_src/mls-eng-full",
+        "kotoba-speech/mls-eng-full",
         split="train",
         streaming=True,
     )
