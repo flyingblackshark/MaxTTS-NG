@@ -97,7 +97,7 @@ if __name__ == "__main__":
         # 返回更新后的音频和采样率
         #example['audio'] = audio
         #example['sampling_rate'] = 44100  # 更新为新采样率
-        batch["audio"] = [librosa.load(io.BytesIO(audio["audio"]["bytes"]), sr=44100)[0] for audio in batch["audio"]]
+        batch["audio"] = [librosa.load(io.BytesIO(audio["bytes"]), sr=44100)[0] for audio in batch["audio"]]
 
         return batch
 
