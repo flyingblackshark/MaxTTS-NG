@@ -14,6 +14,7 @@ import os
 import tensorflow as tf
 from array_record.python.array_record_module import ArrayRecordWriter
 import tiktoken
+import concurrent.futures
 #from datasets import disable_caching
 from collections import defaultdict
 from jax.experimental.compilation_cache import compilation_cache as cc
@@ -88,17 +89,9 @@ if __name__ == "__main__":
         return {'input_ids': ids}
     dataset = dataset.map(process)
     def resample_audio(batch):
-        # 加载音频，保持原采样率
-        #audio, sr = librosa.load(io.BytesIO(example["audio"]["bytes"]), sr=44100)  # 假设原始采样率为 16kHz
-        
-        # 重采样到 44.1kHz
-        #audio_resampled = librosa.resample(audio, sr, 44100)
-        
-        # 返回更新后的音频和采样率
-        #example['audio'] = audio
-        #example['sampling_rate'] = 44100  # 更新为新采样率
-        batch["audio"] = [librosa.load(io.BytesIO(audio["bytes"]), sr=44100)[0] for audio in batch["audio"]]
-
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            resampled_audio = list(executor.map(lambda audio: librosa.load(io.BytesIO(audio["bytes"]), sr=44100)[0], batch["audio"]))
+        batch["audio"] = resampled_audio
         return batch
 
     # 使用 map 函数批量处理数据集
