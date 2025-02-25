@@ -18,6 +18,7 @@ import tiktoken
 from collections import defaultdict
 from jax.experimental.compilation_cache import compilation_cache as cc
 import io
+import soundfile as sf
 cc.set_cache_dir("/tmp/jax_cache")
 # disable_caching()
 #os.environ["HF_DATASETS_IN_MEMORY_MAX_SIZE"]=str(1024*1024*1024*64)
@@ -33,8 +34,9 @@ IS_CONCATED = False
 class HFParseAudioFeatures(grain.MapTransform):
   """Normalize feature keys for HuggingFace input"""
   def map(self, features):
-    audio_44k,sr = librosa.load(io.BytesIO(features["audio"]["bytes"]),sr=44100)
-    #audio_44k = librosa.resample(features["audio"]["array"], orig_sr=SOURCE_SAMPLERATE, target_sr=44100)
+    audio_44k,sr = librosa.load(io.BytesIO(features["audio"]["bytes"]),sr=44100,res_type="scipy")
+    #data, samplerate = sf.read(io.BytesIO(features["audio"]["bytes"]))
+    #audio_44k = librosa.resample(data, orig_sr=samplerate, target_sr=44100)
     return {
         "audio": np.asarray(audio_44k, dtype=np.float32),
         "text": np.asarray(features["text"], dtype=np.int32),
