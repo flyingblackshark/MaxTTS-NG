@@ -109,7 +109,7 @@ if __name__ == "__main__":
         return example
 
     # 使用 map 函数批量处理数据集
-    dataset = dataset.map(resample_audio)
+    dataset = dataset.map(resample_audio,num_proc=4)
 
     def get_sharding_for_spec(pspec: PartitionSpec) -> NamedSharding:
         """
