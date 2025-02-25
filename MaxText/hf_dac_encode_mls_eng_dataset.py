@@ -15,13 +15,17 @@ import tensorflow as tf
 from array_record.python.array_record_module import ArrayRecordWriter
 import tiktoken
 import concurrent.futures
-#from datasets import disable_caching
+from datasets import load_from_disk
+from datasets import disable_caching
 from collections import defaultdict
 from jax.experimental.compilation_cache import compilation_cache as cc
 import io
 import soundfile as sf
+import gcsfs
+import google.auth
 cc.set_cache_dir("/tmp/jax_cache")
-# disable_caching()
+disable_caching()
+import glob
 #os.environ["HF_DATASETS_IN_MEMORY_MAX_SIZE"]=str(1024*1024*1024*64)
 
 DEVICE = "tpu"
@@ -63,12 +67,15 @@ if __name__ == "__main__":
         jax.distributed.initialize()
     device_mesh = mesh_utils.create_device_mesh((jax.device_count(), 1))
     mesh = Mesh(device_mesh, axis_names=("data", "model")) 
+    # credentials, _ = google.auth.default()
+    # scoped_credentials = credentials.with_scopes(['https://www.googleapis.com/auth/devstorage.read_only'])
+    # fs = gcsfs.GCSFileSystem(project="ringed-spirit-446703-m9", token=scoped_credentials)
     dataset = datasets.load_dataset(
-        "kotoba-speech/mls-eng-full",
+        "parquet",
+        data_files='/bucket/mls_eng_full_src/mls-eng-full/data/*.parquet',
         split="train",
         streaming=True,
     )
-    
     cl100k_base = tiktoken.get_encoding("cl100k_base")
 
     enc = tiktoken.Encoding(
