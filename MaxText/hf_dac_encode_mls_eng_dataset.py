@@ -95,16 +95,21 @@ if __name__ == "__main__":
         
         return {'input_ids': ids}
     dataset = dataset.map(process)
-    def resample_audio(batch):
+    def resample_audio(example):
         # 加载音频，保持原采样率
-        with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
-            resampled_audio = list(executor.map(lambda audio: librosa.load(io.BytesIO(audio["bytes"]), sr=44100)[0], batch["audio"]))
-            #audio, sr = librosa.load(io.BytesIO(example["audio"]["bytes"]), sr=44100)  # 假设原始采样率为 16kHz
-        batch["audio"] = resampled_audio
-        return batch
+        audio, sr = librosa.load(io.BytesIO(example["audio"]["bytes"]), sr=44100)  # 假设原始采样率为 16kHz
+        
+        # 重采样到 44.1kHz
+        #audio_resampled = librosa.resample(audio, sr, 44100)
+        
+        # 返回更新后的音频和采样率
+        example['audio'] = audio
+        example['sampling_rate'] = 44100  # 更新为新采样率
+        
+        return example
 
     # 使用 map 函数批量处理数据集
-    dataset = dataset.map(resample_audio, batched=True, batch_size=128)
+    dataset = dataset.map(resample_audio)
 
     def get_sharding_for_spec(pspec: PartitionSpec) -> NamedSharding:
         """
