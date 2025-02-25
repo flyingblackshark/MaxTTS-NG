@@ -31,7 +31,7 @@ PER_DEVICE_BATCH_SIZE = 4
 #GLOBAL_BATCH_SIZE = PER_DEVICE_BATCH_SIZE * jax.device_count()
 #SOURCE_SAMPLERATE = 16000
 IS_CONCATED = False
-CODEBOOK_DIM = 
+CODEBOOK_DIM = 9
 class HFParseAudioFeatures(grain.MapTransform):
   """Normalize feature keys for HuggingFace input"""
   def map(self, features):
