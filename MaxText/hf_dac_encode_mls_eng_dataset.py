@@ -34,11 +34,11 @@ IS_CONCATED = False
 class HFParseAudioFeatures(grain.MapTransform):
   """Normalize feature keys for HuggingFace input"""
   def map(self, features):
-    audio_44k,sr = librosa.load(io.BytesIO(features["audio"]["bytes"]),sr=44100,res_type="scipy")
+    #audio_44k,sr = librosa.load(io.BytesIO(features["audio"]["bytes"]),sr=44100,res_type="scipy")
     #data, samplerate = sf.read(io.BytesIO(features["audio"]["bytes"]))
     #audio_44k = librosa.resample(data, orig_sr=samplerate, target_sr=44100)
     return {
-        "audio": np.asarray(audio_44k, dtype=np.float32),
+        "audio": np.asarray(features["audio"], dtype=np.float32),
         "text": np.asarray(features["text"], dtype=np.int32),
         "speaker" : np.asarray(features["speaker"],dtype=np.int32)
     }   
@@ -87,6 +87,21 @@ if __name__ == "__main__":
         
         return {'input_ids': ids}
     dataset = dataset.map(process)
+    def resample_audio(example):
+        # 加载音频，保持原采样率
+        audio, sr = librosa.load(io.BytesIO(example["audio"]["bytes"]), sr=44100)  # 假设原始采样率为 16kHz
+        
+        # 重采样到 44.1kHz
+        #audio_resampled = librosa.resample(audio, sr, 44100)
+        
+        # 返回更新后的音频和采样率
+        example['audio'] = audio
+        example['sampling_rate'] = 44100  # 更新为新采样率
+        
+        return example
+
+    # 使用 map 函数批量处理数据集
+    dataset = dataset.map(resample_audio)
 
     def get_sharding_for_spec(pspec: PartitionSpec) -> NamedSharding:
         """
