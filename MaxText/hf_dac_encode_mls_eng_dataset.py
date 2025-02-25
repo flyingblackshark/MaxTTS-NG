@@ -72,7 +72,7 @@ if __name__ == "__main__":
     # fs = gcsfs.GCSFileSystem(project="ringed-spirit-446703-m9", token=scoped_credentials)
     dataset = datasets.load_dataset(
         "parquet",
-        data_files='/bucket/mls_eng_full_src/mls-eng-full/data/*.parquet',
+        data_files='/home/fbsdev009/bucket/mls_eng_full_src/mls-eng-full/data/*.parquet',
         split="train",
         streaming=True,
     )
