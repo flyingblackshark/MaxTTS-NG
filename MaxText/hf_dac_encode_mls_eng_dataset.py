@@ -31,7 +31,7 @@ PER_DEVICE_BATCH_SIZE = 4
 #GLOBAL_BATCH_SIZE = PER_DEVICE_BATCH_SIZE * jax.device_count()
 #SOURCE_SAMPLERATE = 16000
 IS_CONCATED = False
-
+CODEBOOK_DIM = 
 class HFParseAudioFeatures(grain.MapTransform):
   """Normalize feature keys for HuggingFace input"""
   def map(self, features):
@@ -88,14 +88,21 @@ if __name__ == "__main__":
         
         return {'input_ids': ids}
     dataset = dataset.map(process)
-    def resample_audio(batch):
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            resampled_audio = list(executor.map(lambda audio: librosa.load(io.BytesIO(audio["bytes"]), sr=44100)[0], batch["audio"]))
-        batch["audio"] = resampled_audio
-        return batch
+    def resample_audio(example):
+        # 加载音频，保持原采样率
+        audio, sr = librosa.load(io.BytesIO(example["audio"]["bytes"]), sr=44100)  # 假设原始采样率为 16kHz
+        
+        # 重采样到 44.1kHz
+        #audio_resampled = librosa.resample(audio, sr, 44100)
+        
+        # 返回更新后的音频和采样率
+        example['audio'] = audio
+        example['sampling_rate'] = 44100  # 更新为新采样率
+        
+        return example
 
     # 使用 map 函数批量处理数据集
-    dataset = dataset.map(resample_audio, batched=True, batch_size=32)
+    dataset = dataset.map(resample_audio)
 
     def get_sharding_for_spec(pspec: PartitionSpec) -> NamedSharding:
         """
@@ -171,6 +178,10 @@ if __name__ == "__main__":
         string_suffix,
         allowed_special={"<|im_start|>","<|im_end|>"}
     )
+    semantic_token_id = enc.encode_single_token("<|semantic|>")
+    end_token_id  = enc.encode_single_token("<|im_end|>")
+
+
     for item in multihost_gen:
         print(f"round {i}",flush=True)
         if jax.process_index() == 0:
@@ -226,14 +237,12 @@ if __name__ == "__main__":
                             temp_semantic_slice = np.concatenate((temp_semantic_slice,s),axis=1)
 
                     encoded = encoded_prefix + temp_text_slice + encoded_suffix
-                    codebook_dim = 9
 
-                    semantic_token_id = enc.encode_single_token("<|semantic|>")
                     semantic_length = temp_semantic_slice.shape[1]
                     tokens = (
                         encoded
                         + [semantic_token_id] * semantic_length
-                        + [enc.encode_single_token("<|im_end|>")]
+                        + [end_token_id]
                     )
                     prompt_length = len(encoded)
 
@@ -256,18 +265,16 @@ if __name__ == "__main__":
                     full_tokens = None
                     for t,s in zip(speaker_token_list,speaker_semantic_list):
                         encoded = encoded_prefix + t.tolist() + encoded_suffix
-                        codebook_dim = 9
 
-                        semantic_token_id = enc.encode_single_token("<|semantic|>")
+                        
                         semantic_length = s.shape[1]
                         tokens = (
                             encoded
                             + [semantic_token_id] * semantic_length
-                            + [enc.encode_single_token("<|im_end|>")]
+                            + [end_token_id]
                         )
                         prompt_length = len(encoded)
 
-                        
                         codes = np.pad(s,((0,0),(prompt_length,1)),constant_values=CODEBOOK_PAD_TOKEN_ID)
                         tokens = np.asarray(tokens)
                         codes = codes.transpose(1,0)
