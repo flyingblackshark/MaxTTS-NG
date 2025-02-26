@@ -115,7 +115,7 @@ if __name__ == "__main__":
     replicate_sharding = get_sharding_for_spec(PartitionSpec(None))
     @partial(jax.jit, in_shardings=x_sharding,out_shardings=replicate_sharding)
     def encode_to_codes(x: jnp.ndarray):
-        codes, scale = model.apply(
+        codes, _ = model.apply(
             variables,
             x,
             method="encode",
