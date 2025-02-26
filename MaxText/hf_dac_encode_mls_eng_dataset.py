@@ -280,7 +280,7 @@ if __name__ == "__main__":
                         if full_tokens is None:
                             full_tokens = tokens
                         else:
-                            full_tokens = jnp.concatenate((full_tokens,tokens),axis=0)
+                            full_tokens = np.concatenate((full_tokens,tokens),axis=0)
                     example = tf.train.Example(
                         features=tf.train.Features(
                             feature={
