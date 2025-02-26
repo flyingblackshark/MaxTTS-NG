@@ -281,13 +281,13 @@ if __name__ == "__main__":
                             full_tokens = tokens
                         else:
                             full_tokens = jnp.concatenate((full_tokens,tokens),axis=0)
-                        example = tf.train.Example(
-                            features=tf.train.Features(
-                                feature={
-                                    'tokens': tf.train.Feature(bytes_list=tf.train.BytesList(value=[tf.io.serialize_tensor(full_tokens).numpy()]))
-                                }
-                            )
+                    example = tf.train.Example(
+                        features=tf.train.Features(
+                            feature={
+                                'tokens': tf.train.Feature(bytes_list=tf.train.BytesList(value=[tf.io.serialize_tensor(full_tokens).numpy()]))
+                            }
                         )
+                    )
                 if jax.process_index() == 0:
                     writer.write(example.SerializeToString())
 
