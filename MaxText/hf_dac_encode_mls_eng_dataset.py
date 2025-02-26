@@ -14,18 +14,12 @@ import os
 import tensorflow as tf
 from array_record.python.array_record_module import ArrayRecordWriter
 import tiktoken
-import concurrent.futures
-from datasets import load_from_disk
 from datasets import disable_caching
 from collections import defaultdict
 from jax.experimental.compilation_cache import compilation_cache as cc
 import io
-import soundfile as sf
-import gcsfs
-import google.auth
 cc.set_cache_dir("/tmp/jax_cache")
 disable_caching()
-import glob
 #os.environ["HF_DATASETS_IN_MEMORY_MAX_SIZE"]=str(1024*1024*1024*64)
 
 DEVICE = "tpu"
@@ -67,9 +61,6 @@ if __name__ == "__main__":
         jax.distributed.initialize()
     device_mesh = mesh_utils.create_device_mesh((jax.device_count(), 1))
     mesh = Mesh(device_mesh, axis_names=("data", "model")) 
-    # credentials, _ = google.auth.default()
-    # scoped_credentials = credentials.with_scopes(['https://www.googleapis.com/auth/devstorage.read_only'])
-    # fs = gcsfs.GCSFileSystem(project="ringed-spirit-446703-m9", token=scoped_credentials)
     dataset = datasets.load_dataset(
         "parquet",
         data_files='/home/fbsdev009/bucket/mls_eng_full_src/mls-eng-full/data/*.parquet',
@@ -122,7 +113,7 @@ if __name__ == "__main__":
     print("download dac model complete")
     x_sharding = get_sharding_for_spec(PartitionSpec("data"))
     replicate_sharding = get_sharding_for_spec(PartitionSpec(None))
-    #@partial(jax.jit, in_shardings=x_sharding,out_shardings=replicate_sharding)
+    @partial(jax.jit, in_shardings=x_sharding,out_shardings=replicate_sharding)
     def encode_to_codes(x: jnp.ndarray):
         codes, scale = model.apply(
             variables,
