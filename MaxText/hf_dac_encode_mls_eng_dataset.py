@@ -88,7 +88,7 @@ if __name__ == "__main__":
     dataset = dataset.map(process)
     def resample_audio(example):
         # 加载音频，保持原采样率
-        audio, sr = librosa.load(io.BytesIO(example["audio"]["bytes"]), sr=44100)  # 假设原始采样率为 16kHz
+        audio, sr = librosa.load(io.BytesIO(example["audio"]["bytes"]), sr=44100,res_type="kaiser_fast")  # 假设原始采样率为 16kHz
         
         # 重采样到 44.1kHz
         #audio_resampled = librosa.resample(audio, sr, 44100)
