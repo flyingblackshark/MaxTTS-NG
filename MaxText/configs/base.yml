@@ -201,7 +201,7 @@ record_internal_nn_metrics: 0
 
 # Output directory
 # Create a GCS bucket, e.g. my-maxtext-outputs and set this to "gs://my-maxtext-outputs/"
-base_output_directory: "gs://fbs-us2/test-maxtext-output/"
+base_output_directory: ""
 
 # Whether or not to enable emergency checkpoint. If True, `local_checkpoint_directory` and a non-zero `local_checkpoint_period` must also be specified.
 # Emergency checkpoint is an experimental Orbax feature that: periodically saves to persistent storage and, with a larger invertal, saves to a local directory.
@@ -339,7 +339,7 @@ hf_eval_split: ''
 hf_eval_files: ''
 hf_access_token: ''
 # for Grain input pipeline (dataset_type=grain)
-grain_train_files: '/home/fbsdev009/bucket/dac_dataset_1/*.arrayrecord'
+grain_train_files: ''
 grain_eval_files: ''
 grain_worker_count: 1
 
