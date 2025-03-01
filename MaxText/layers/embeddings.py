@@ -90,7 +90,7 @@ class Embed(nn.Module):
     output_vocab = [jnp.asarray(self.embedding, self.dtype)[inputs[:,:, 0]]]
     codebook_mask = (inputs[:,:, 0] == cfg.semantic_token_id)[...,jnp.newaxis]
     for i in range(cfg.codebook_dim):
-      output_codebook = jnp.asarray(self.codebook_embedding[i], self.dtype)[inputs[:,: ,i + 1]]
+      output_codebook = jnp.asarray(self.codebook_embedding_tables[i], self.dtype)[inputs[:,: ,i + 1]]
       output_codebook = output_codebook * codebook_mask
       output_vocab.append(output_codebook)
     output = jnp.stack(output_vocab,axis=3)
